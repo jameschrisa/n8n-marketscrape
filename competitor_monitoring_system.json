@@ -1,0 +1,563 @@
+{
+  "n8n_workflow": {
+    "name": "Financial Software Competitor Monitor",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "value": "0 9 1 * *"
+              }
+            ]
+          }
+        },
+        "id": "cron-monthly",
+        "name": "Monthly Trigger",
+        "type": "n8n-nodes-base.cron",
+        "typeVersion": 1.1,
+        "position": [
+          240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "taxplaniq",
+                "name": "taxplaniq",
+                "value": {
+                  "name": "TaxPlanIQ",
+                  "url": "https://www.taxplaniq.com/",
+                  "actorId": "your-apify-actor-id",
+                  "selectors": {
+                    "headline": "h1, .hero-headline, .main-title",
+                    "pricing": ".pricing-section, .price, [class*='price']",
+                    "benefits": ".benefit, .feature, [class*='benefit']",
+                    "cta": ".btn-primary, .cta-button, [class*='cta']"
+                  }
+                }
+              },
+              {
+                "id": "fpalpha",
+                "name": "fpalpha", 
+                "value": {
+                  "name": "FP Alpha",
+                  "url": "https://fpalpha.com/",
+                  "actorId": "your-apify-actor-id",
+                  "selectors": {
+                    "headline": "h1, .hero-headline, .main-title",
+                    "pricing": ".pricing-section, .price, [class*='price']",
+                    "benefits": ".benefit, .feature, [class*='benefit']",
+                    "cta": ".btn-primary, .cta-button, [class*='cta']"
+                  }
+                }
+              },
+              {
+                "id": "rightcapital",
+                "name": "rightcapital",
+                "value": {
+                  "name": "RightCapital", 
+                  "url": "https://www.rightcapital.com/",
+                  "actorId": "your-apify-actor-id",
+                  "selectors": {
+                    "headline": "h1, .hero-headline, .main-title",
+                    "pricing": ".pricing-section, .price, [class*='price']",
+                    "benefits": ".benefit, .feature, [class*='benefit']",
+                    "cta": ".btn-primary, .cta-button, [class*='cta']"
+                  }
+                }
+              },
+              {
+                "id": "taxstatus",
+                "name": "taxstatus",
+                "value": {
+                  "name": "TaxStatus",
+                  "url": "https://www.taxstatus.com/",
+                  "actorId": "your-apify-actor-id", 
+                  "selectors": {
+                    "headline": "h1, .hero-headline, .main-title",
+                    "pricing": ".pricing-section, .price, [class*='price']",
+                    "benefits": ".benefit, .feature, [class*='benefit']",
+                    "cta": ".btn-primary, .cta-button, [class*='cta']"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "id": "set-competitors",
+        "name": "Set Competitors",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          440,
+          300
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "split-competitors",
+        "name": "Split Competitors",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          640,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "actorId": "{{ $json.actorId }}",
+          "runInput": {
+            "startUrls": [
+              {
+                "url": "{{ $json.url }}"
+              }
+            ],
+            "pageFunction": "async function pageFunction(context) {\n    const { page, request } = context;\n    await page.waitForTimeout(3000);\n    \n    // Extract main headline\n    let headline = '';\n    try {\n        headline = await page.$eval('h1', el => el.textContent?.trim()) || \n                  await page.$eval('.hero-headline', el => el.textContent?.trim()) || \n                  await page.$eval('.main-title', el => el.textContent?.trim()) || '';\n    } catch (e) {}\n    \n    // Extract pricing information\n    let pricing = [];\n    try {\n        pricing = await page.$$eval('.pricing-section *, .price *, [class*=\"price\"] *', els => \n            els.map(el => el.textContent?.trim()).filter(text => text && text.length > 0)\n        );\n    } catch (e) {}\n    \n    // Extract benefits/features\n    let benefits = [];\n    try {\n        benefits = await page.$$eval('.benefit *, .feature *, [class*=\"benefit\"] *', els => \n            els.map(el => el.textContent?.trim()).filter(text => text && text.length > 0)\n        );\n    } catch (e) {}\n    \n    // Extract CTA text\n    let cta = [];\n    try {\n        cta = await page.$$eval('.btn-primary, .cta-button, [class*=\"cta\"]', els => \n            els.map(el => el.textContent?.trim()).filter(text => text && text.length > 0)\n        );\n    } catch (e) {}\n    \n    // Get page title and meta description\n    const title = await page.title();\n    const metaDescription = await page.$eval('meta[name=\"description\"]', el => el.content).catch(() => '');\n    \n    return {\n        url: request.url,\n        competitor: '{{ $json.name }}',\n        scrapedAt: new Date().toISOString(),\n        headline: headline,\n        title: title,\n        metaDescription: metaDescription,\n        pricing: pricing.slice(0, 10), // Limit to first 10 items\n        benefits: benefits.slice(0, 15), // Limit to first 15 items\n        cta: cta.slice(0, 5), // Limit to first 5 items\n        rawData: {\n            headline,\n            pricing,\n            benefits,\n            cta\n        }\n    };\n}",
+            "waitUntil": [
+              "networkidle2"
+            ]
+          },
+          "waitForRunFinish": true
+        },
+        "id": "apify-scraper",
+        "name": "Apify Scraper",
+        "type": "n8n-nodes-base.apify",
+        "typeVersion": 1,
+        "position": [
+          840,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "baseId": "{{ $vars.AIRTABLE_BASE_ID }}",
+          "tableId": "Snapshots",
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Competitor": "{{ $json.competitor }}",
+              "URL": "{{ $json.url }}",
+              "Snapshot Date": "{{ $json.scrapedAt }}",
+              "Headline": "{{ $json.headline }}",
+              "Title": "{{ $json.title }}",
+              "Meta Description": "{{ $json.metaDescription }}",
+              "Pricing Data": "{{ JSON.stringify($json.pricing) }}",
+              "Benefits Data": "{{ JSON.stringify($json.benefits) }}",
+              "CTA Data": "{{ JSON.stringify($json.cta) }}",
+              "Raw Data": "{{ JSON.stringify($json.rawData) }}"
+            }
+          }
+        },
+        "id": "save-snapshot",
+        "name": "Save Current Snapshot",
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2,
+        "position": [
+          1040,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "baseId": "{{ $vars.AIRTABLE_BASE_ID }}",
+          "tableId": "Snapshots",
+          "returnAll": true,
+          "options": {
+            "sort": [
+              {
+                "field": "Snapshot Date",
+                "direction": "desc"
+              }
+            ],
+            "filterByFormula": "AND({Competitor} = '{{ $json.competitor }}', {Snapshot Date} < TODAY())"
+          }
+        },
+        "id": "get-previous-snapshot",
+        "name": "Get Previous Snapshot",
+        "type": "n8n-nodes-base.airtable",
+        "typeVersion": 2,
+        "position": [
+          1240,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Compare current snapshot with previous snapshot\nconst currentData = $input.first();\nconst previousData = $input.all().slice(1); // Skip current, get previous\n\nif (!previousData.length) {\n  return [{\n    competitor: currentData.competitor,\n    message: 'First snapshot - no comparison available',\n    hasChanges: false\n  }];\n}\n\nconst previous = previousData[0];\nconst changes = [];\n\n// Helper function to calculate similarity\nfunction calculateSimilarity(str1, str2) {\n  if (!str1 || !str2) return str1 === str2 ? 1 : 0;\n  \n  const longer = str1.length > str2.length ? str1 : str2;\n  const shorter = str1.length > str2.length ? str2 : str1;\n  \n  if (longer.length === 0) return 1.0;\n  \n  const editDistance = levenshteinDistance(longer, shorter);\n  return (longer.length - editDistance) / longer.length;\n}\n\nfunction levenshteinDistance(str1, str2) {\n  const matrix = [];\n  \n  for (let i = 0; i <= str2.length; i++) {\n    matrix[i] = [i];\n  }\n  \n  for (let j = 0; j <= str1.length; j++) {\n    matrix[0][j] = j;\n  }\n  \n  for (let i = 1; i <= str2.length; i++) {\n    for (let j = 1; j <= str1.length; j++) {\n      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {\n        matrix[i][j] = matrix[i - 1][j - 1];\n      } else {\n        matrix[i][j] = Math.min(\n          matrix[i - 1][j - 1] + 1,\n          matrix[i][j - 1] + 1,\n          matrix[i - 1][j] + 1\n        );\n      }\n    }\n  }\n  \n  return matrix[str2.length][str1.length];\n}\n\n// Check headline changes\nif (currentData.headline !== previous.headline) {\n  const similarity = calculateSimilarity(currentData.headline, previous.headline);\n  if (similarity < 0.8) { // 80% similarity threshold\n    changes.push({\n      type: 'headline',\n      field: 'Main Headline',\n      old: previous.headline,\n      new: currentData.headline,\n      significance: Math.round((1 - similarity) * 10), // 1-10 scale\n      similarity: similarity\n    });\n  }\n}\n\n// Check title changes\nif (currentData.title !== previous.title) {\n  const similarity = calculateSimilarity(currentData.title, previous.title);\n  if (similarity < 0.9) {\n    changes.push({\n      type: 'title',\n      field: 'Page Title',\n      old: previous.title,\n      new: currentData.title,\n      significance: Math.round((1 - similarity) * 8),\n      similarity: similarity\n    });\n  }\n}\n\n// Check pricing changes\nconst currentPricing = JSON.stringify(currentData.pricing);\nconst previousPricing = JSON.stringify(previous.pricing);\nif (currentPricing !== previousPricing) {\n  changes.push({\n    type: 'pricing',\n    field: 'Pricing Information',\n    old: previousPricing,\n    new: currentPricing,\n    significance: 9, // Pricing changes are always significant\n    similarity: 0\n  });\n}\n\n// Check benefits changes\nconst currentBenefits = JSON.stringify(currentData.benefits);\nconst previousBenefits = JSON.stringify(previous.benefits);\nif (currentBenefits !== previousBenefits) {\n  changes.push({\n    type: 'benefits',\n    field: 'Benefits/Features',\n    old: previousBenefits,\n    new: currentBenefits,\n    significance: 7,\n    similarity: 0\n  });\n}\n\nif (changes.length === 0) {\n  return [{\n    competitor: currentData.competitor,\n    message: 'No significant changes detected',\n    hasChanges: false,\n    url: currentData.url,\n    scrapedAt: currentData.scrapedAt\n  }];\n}\n\nreturn changes.map(change => ({\n  competitor: currentData.competitor,\n  changeType: change.type,\n  field: change.field,\n  oldValue: change.old,\n  newValue: change.new,\n  significance: change.significance,\n  hasChanges: true,\n  url: currentData.url,\n  scrapedAt: currentData.scrapedAt,\n  changeDate: new Date().toISOString()\n}));"
+        },
+        "id": "compare-changes",
+        "name": "Compare Changes",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1440,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "has-changes",
+                "leftValue": "{{ $json.hasChanges }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "equal",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "if-has-changes",
+        "name": "If Has Changes",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1640,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "baseId": "{{ $vars.AIRTABLE_BASE_ID }}",
+          "tableId": "Changes",
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Competitor": "{{ $json.competitor }}",\n              "Change Type": "{{ $json.changeType }}",\n              "Field": "{{ $json.field }}",\n              "Change Date": "{{ $json.changeDate }}",\n              "Old Value": "{{ $json.oldValue }}",\n              "New Value": "{{ $json.newValue }}",\n              "Significance": "{{ $json.significance }}",\n              "URL": "{{ $json.url }}",\n              "Posted to Notion": false\n            }\n          }\n        },\n        "id": "save-changes",\n        "name": "Save Changes",\n        "type": "n8n-nodes-base.airtable",\n        "typeVersion": 2,\n        "position": [\n          1840,\n          260\n        ]\n      },\n      {\n        "parameters": {\n          "databaseId": "{{ $vars.NOTION_DATABASE_ID }}",\n          "simple": false,\n          "propertiesUi": {\n            "propertyValues": [\n              {\n                "key": "Competitor",\n                "type": "select",\n                "selectValue": "{{ $json.competitor }}"\n              },\n              {\n                "key": "Change Type",\n                "type": "select", \n                "selectValue": "{{ $json.changeType }}"\n              },\n              {\n                "key": "Field",\n                "type": "title",\n                "titleValue": [{\n                  "text": {\n                    "content": "{{ $json.field }}"\n                  }\n                }]\n              },\n              {\n                "key": "Date",\n                "type": "date",\n                "dateValue": {\n                  "start": "{{ $json.changeDate }}"\n                }\n              },\n              {\n                "key": "Old Value",\n                "type": "rich_text",\n                "richTextValue": [{\n                  "text": {\n                    "content": "{{ $json.oldValue.substring(0, 2000) }}"\n                  }\n                }]\n              },\n              {\n                "key": "New Value",\n                "type": "rich_text", \n                "richTextValue": [{\n                  "text": {\n                    "content": "{{ $json.newValue.substring(0, 2000) }}"\n                  }\n                }]\n              },\n              {\n                "key": "Significance",\n                "type": "number",\n                "numberValue": "{{ $json.significance }}"\n              },\n              {\n                "key": "URL",\n                "type": "url",\n                "urlValue": "{{ $json.url }}"\n              }\n            ]\n          }\n        },\n        "id": "post-to-notion",\n        "name": "Post to Notion",\n        "type": "n8n-nodes-base.notion",\n        "typeVersion": 2.2,\n        "position": [\n          1840,\n          400\n        ]\n      },\n      {\n        "parameters": {\n          "assignments": {\n            "assignments": [\n              {\n                "id": "summary",\n                "name": "summary",\n                "value": "{{ $runIndex }} of {{ $input.all().length }} competitors processed. Found {{ $input.all().filter(item => item.hasChanges).length }} changes.",\n                "type": "string"\n              }\n            ]\n          }\n        },\n        "id": "create-summary",\n        "name": "Create Summary",\n        "type": "n8n-nodes-base.set",\n        "typeVersion": 3.4,\n        "position": [\n          2040,\n          300\n        ]\n      },\n      {\n        "parameters": {\n          "fromEmail": "{{ $vars.FROM_EMAIL }}",\n          "toEmail": "{{ $vars.TO_EMAIL }}",\n          "subject": "Competitor Analysis Complete - {{ new Date().toLocaleDateString() }}",\n          "text": "Monthly competitor analysis completed.\\n\\n{{ $json.summary }}\\n\\nCheck Notion for detailed changes: {{ $vars.NOTION_PAGE_URL }}"\n        },\n        "id": "send-summary-email",\n        "name": "Send Summary Email",\n        "type": "n8n-nodes-base.emailSend",\n        "typeVersion": 2.1,\n        "position": [\n          2240,\n          300\n        ]\n      }\n    ],\n    "connections": {\n      "Monthly Trigger": {\n        "main": [\n          [\n            {\n              "node": "Set Competitors",\n              "type": "main",\n              "index": 0\n            }\n          ]\n        ]\n      },\n      "Set Competitors": {\n        "main": [\n          [\n            {\n              "node": "Split Competitors",\n              "type": "main",\n              "index": 0\n            }\n          ]\n        ]\n      },\n      "Split Competitors": {\n        "main": [\n          [\n            {\n              "node": "Apify Scraper",\n              "type": "main",\n              "index": 0\n            }\n          ]\n        ]\n      },\n      "Apify Scraper": {\n        "main": [\n          [\n            {\n              "node": "Save Current Snapshot",\n              "type": "main",\n              "index": 0\n            }\n          ]\n        ]\n      },\n      "Save Current Snapshot": {\n        "main": [\n          [\n            {\n              "node": "Get Previous Snapshot",\n              "type": "main",\n              "index": 0\n            }\n          ]\n        ]\n      },\n      "Get Previous Snapshot": {\n        "main": [\n          [\n            {\n              "node": "Compare Changes",\n              "type": "main",\n              "index": 0\n            }\n          ]\n        ]\n      },\n      "Compare Changes": {\n        "main": [\n          [\n            {\n              "node": "If Has Changes",\n              "type": "main",\n              "index": 0\n            }\n          ]\n        ]\n      },\n      "If Has Changes": {\n        "main": [\n          [\n            {\n              "node": "Save Changes",\n              "type": "main",\n              "index": 0\n            },\n            {\n              "node": "Post to Notion",\n              "type": "main",\n              "index": 0\n            }\n          ],\n          [\n            {\n              "node": "Create Summary",\n              "type": "main",\n              "index": 0\n            }\n          ]\n        ]\n      },\n      "Save Changes": {\n        "main": [\n          [\n            {\n              "node": "Create Summary",\n              "type": "main",\n              "index": 0\n            }\n          ]\n        ]\n      },\n      "Post to Notion": {\n        "main": [\n          [\n            {\n              "node": "Create Summary",\n              "type": "main",\n              "index": 0\n            }\n          ]\n        ]\n      },\n      "Create Summary": {\n        "main": [\n          [\n            {\n              "node": "Send Summary Email",\n              "type": "main",\n              "index": 0\n            }\n          ]\n        ]\n      }\n    },\n    "settings": {\n      "executionOrder": "v1"\n    }\n  },\n  "apify_actor_config": {\n    "name": "Financial Software Competitor Scraper",\n    "title": "Financial Software Competitor Monitor",\n    "description": "Scrapes competitor websites for marketing copy changes - headlines, pricing, benefits, CTAs",\n    "version": "0.0.1",\n    "buildTag": "latest",\n    "dockerfile": "./Dockerfile",\n    "input": "./INPUT_SCHEMA.json",\n    "readme": "./README.md"\n  },\n  "apify_page_function": "async function pageFunction(context) {\n    const { page, request } = context;\n    \n    // Wait for page to fully load\n    await page.waitForTimeout(5000);\n    await page.waitForLoadState('networkidle');\n    \n    console.log('Scraping:', request.url);\n    \n    // Extract main headline - try multiple selectors\n    let headline = '';\n    const headlineSelectors = [\n        'h1',\n        '.hero-headline', \n        '.main-title',\n        '.hero-title',\n        '.headline',\n        '[class*=\"hero\"] h1',\n        '[class*=\"hero\"] h2',\n        '.page-title'\n    ];\n    \n    for (const selector of headlineSelectors) {\n        try {\n            const element = await page.$(selector);\n            if (element) {\n                headline = await element.textContent();\n                headline = headline?.trim();\n                if (headline && headline.length > 10) break;\n            }\n        } catch (e) {}\n    }\n    \n    // Extract pricing information\n    let pricing = [];\n    const pricingSelectors = [\n        '.pricing-section',\n        '.price',\n        '.pricing',\n        '[class*=\"price\"]',\n        '[class*=\"pricing\"]',\n        '.cost',\n        '.plan'\n    ];\n    \n    for (const selector of pricingSelectors) {\n        try {\n            const elements = await page.$$(selector + ' *');\n            for (const element of elements) {\n                const text = await element.textContent();\n                if (text && text.trim() && (text.includes('$') || text.includes('month') || text.includes('plan'))) {\n                    pricing.push(text.trim());\n                }\n            }\n            if (pricing.length > 0) break;\n        } catch (e) {}\n    }\n    \n    // Extract benefits/features\n    let benefits = [];\n    const benefitSelectors = [\n        '.benefit',\n        '.feature',\n        '[class*=\"benefit\"]',\n        '[class*=\"feature\"]',\n        '.advantage',\n        '.value-prop',\n        'ul li',\n        '.list-item'\n    ];\n    \n    for (const selector of benefitSelectors) {\n        try {\n            const elements = await page.$$(selector);\n            for (const element of elements) {\n                const text = await element.textContent();\n                if (text && text.trim().length > 10 && text.trim().length < 200) {\n                    benefits.push(text.trim());\n                }\n            }\n            if (benefits.length >= 5) break;\n        } catch (e) {}\n    }\n    \n    // Extract CTA text\n    let cta = [];\n    const ctaSelectors = [\n        '.btn-primary',\n        '.cta-button',\n        '[class*=\"cta\"]',\n        '.button',\n        'button',\n        '.btn',\n        'a[class*=\"button\"]'\n    ];\n    \n    for (const selector of ctaSelectors) {\n        try {\n            const elements = await page.$$(selector);\n            for (const element of elements) {\n                const text = await element.textContent();\n                if (text && text.trim() && text.trim().length < 50) {\n                    cta.push(text.trim());\n                }\n            }\n            if (cta.length >= 3) break;\n        } catch (e) {}\n    }\n    \n    // Get page title and meta description\n    const title = await page.title();\n    let metaDescription = '';\n    try {\n        metaDescription = await page.$eval('meta[name=\"description\"]', el => el.content) || '';\n    } catch (e) {}\n    \n    // Get competitor name from URL\n    const url = new URL(request.url);\n    let competitor = '';\n    if (url.hostname.includes('taxplaniq')) competitor = 'TaxPlanIQ';\n    else if (url.hostname.includes('fpalpha')) competitor = 'FP Alpha';\n    else if (url.hostname.includes('rightcapital')) competitor = 'RightCapital';\n    else if (url.hostname.includes('taxstatus')) competitor = 'TaxStatus';\n    else competitor = url.hostname;\n    \n    const result = {\n        url: request.url,\n        competitor: competitor,\n        scrapedAt: new Date().toISOString(),\n        headline: headline || '',\n        title: title || '',\n        metaDescription: metaDescription,\n        pricing: Array.from(new Set(pricing)).slice(0, 10), // Remove duplicates, limit to 10\n        benefits: Array.from(new Set(benefits)).slice(0, 15), // Remove duplicates, limit to 15\n        cta: Array.from(new Set(cta)).slice(0, 5), // Remove duplicates, limit to 5\n        elementsFound: {\n            headline: !!headline,\n            pricing: pricing.length > 0,\n            benefits: benefits.length > 0,\n            cta: cta.length > 0\n        }\n    };\n    \n    console.log('Scraped data for', competitor, ':', {\n        headline: !!result.headline,\n        pricing: result.pricing.length,\n        benefits: result.benefits.length,\n        cta: result.cta.length\n    });\n    \n    return result;\n}",\n  "airtable_schema": {
+    "snapshots_table": {
+      "name": "Snapshots",
+      "fields": [
+        {
+          "name": "Competitor",
+          "type": "singleSelect",
+          "options": {
+            "choices": [
+              {"name": "TaxPlanIQ", "color": "blueLight2"},
+              {"name": "FP Alpha", "color": "greenLight2"},
+              {"name": "RightCapital", "color": "orangeLight2"},
+              {"name": "TaxStatus", "color": "purpleLight2"}
+            ]
+          }
+        },
+        {
+          "name": "URL",
+          "type": "url"
+        },
+        {
+          "name": "Snapshot Date",
+          "type": "date",
+          "options": {
+            "dateFormat": {
+              "name": "iso"
+            }
+          }
+        },
+        {
+          "name": "Headline",
+          "type": "multilineText"
+        },
+        {
+          "name": "Title",
+          "type": "multilineText"
+        },
+        {
+          "name": "Meta Description",
+          "type": "multilineText"
+        },
+        {
+          "name": "Pricing Data",
+          "type": "multilineText"
+        },
+        {
+          "name": "Benefits Data",
+          "type": "multilineText"
+        },
+        {
+          "name": "CTA Data",
+          "type": "multilineText"
+        },
+        {
+          "name": "Raw Data",
+          "type": "multilineText"
+        }
+      ]
+    },
+    "changes_table": {
+      "name": "Changes",
+      "fields": [
+        {
+          "name": "Competitor",
+          "type": "singleSelect",
+          "options": {
+            "choices": [
+              {"name": "TaxPlanIQ", "color": "blueLight2"},
+              {"name": "FP Alpha", "color": "greenLight2"},
+              {"name": "RightCapital", "color": "orangeLight2"},
+              {"name": "TaxStatus", "color": "purpleLight2"}
+            ]
+          }
+        },
+        {
+          "name": "Change Type",
+          "type": "singleSelect",
+          "options": {
+            "choices": [
+              {"name": "headline", "color": "redLight2"},
+              {"name": "title", "color": "yellowLight2"},
+              {"name": "pricing", "color": "greenLight2"},
+              {"name": "benefits", "color": "blueLight2"},
+              {"name": "cta", "color": "purpleLight2"}
+            ]
+          }
+        },
+        {
+          "name": "Field",
+          "type": "singleLineText"
+        },
+        {
+          "name": "Change Date",
+          "type": "date",
+          "options": {
+            "dateFormat": {
+              "name": "iso"
+            }
+          }
+        },
+        {
+          "name": "Old Value",
+          "type": "multilineText"
+        },
+        {
+          "name": "New Value",
+          "type": "multilineText"
+        },
+        {
+          "name": "Significance",
+          "type": "number",
+          "options": {
+            "precision": 0
+          }
+        },
+        {
+          "name": "URL",
+          "type": "url"
+        },
+        {
+          "name": "Posted to Notion",
+          "type": "checkbox"
+        }
+      ]
+    }
+  },
+  "notion_database_schema": {
+    "name": "Competitor Changes",
+    "description": "Track marketing changes from competitor websites",
+    "properties": {
+      "Field": {
+        "type": "title"
+      },
+      "Competitor": {
+        "type": "select",
+        "select": {
+          "options": [
+            {"name": "TaxPlanIQ", "color": "blue"},
+            {"name": "FP Alpha", "color": "green"},
+            {"name": "RightCapital", "color": "orange"},
+            {"name": "TaxStatus", "color": "purple"}
+          ]
+        }
+      },
+      "Change Type": {
+        "type": "select",
+        "select": {
+          "options": [
+            {"name": "headline", "color": "red"},
+            {"name": "title", "color": "yellow"},
+            {"name": "pricing", "color": "green"},
+            {"name": "benefits", "color": "blue"},
+            {"name": "cta", "color": "purple"}
+          ]
+        }
+      },
+      "Date": {
+        "type": "date"
+      },
+      "Old Value": {
+        "type": "rich_text"
+      },
+      "New Value": {
+        "type": "rich_text"
+      },
+      "Significance": {
+        "type": "number",
+        "number": {
+          "format": "number"
+        }
+      },
+      "URL": {
+        "type": "url"
+      }
+    }
+  },
+  "environment_variables": {
+    "required_vars": [
+      "APIFY_TOKEN",
+      "AIRTABLE_API_KEY", 
+      "AIRTABLE_BASE_ID",
+      "NOTION_API_KEY",
+      "NOTION_DATABASE_ID",
+      "FROM_EMAIL",
+      "TO_EMAIL",
+      "NOTION_PAGE_URL"
+    ],
+    "descriptions": {
+      "APIFY_TOKEN": "Your Apify API token from apify.com/account#/integrations",
+      "AIRTABLE_API_KEY": "Your Airtable API key from airtable.com/account",
+      "AIRTABLE_BASE_ID": "Base ID from your Airtable base URL",
+      "NOTION_API_KEY": "Integration token from notion.com/integrations",
+      "NOTION_DATABASE_ID": "Database ID from your Notion database URL",
+      "FROM_EMAIL": "Email address to send notifications from",
+      "TO_EMAIL": "Your email address to receive notifications",
+      "NOTION_PAGE_URL": "URL to your Notion database for easy access"
+    }
+  },
+  "setup_instructions": {
+    "step_1_apify": {
+      "title": "Set up Apify Actor",
+      "steps": [
+        "1. Go to apify.com and create an account",
+        "2. Create a new Actor using 'Puppeteer Scraper' template",
+        "3. Replace the pageFunction with the code provided above",
+        "4. Set the input schema to accept startUrls array",
+        "5. Test the actor with one of your competitor URLs",
+        "6. Publish the actor and note the Actor ID"
+      ]
+    },
+    "step_2_airtable": {
+      "title": "Set up Airtable Database", 
+      "steps": [
+        "1. Go to airtable.com and create a new base",
+        "2. Create 'Snapshots' table with the fields specified in the schema",
+        "3. Create 'Changes' table with the fields specified in the schema", 
+        "4. Get your API key from airtable.com/account",
+        "5. Get the Base ID from the base URL (starts with 'app')"
+      ]
+    },
+    "step_3_notion": {
+      "title": "Set up Notion Database",
+      "steps": [
+        "1. Go to notion.com/integrations and create a new integration",
+        "2. Get the integration token (keep it secret!)",
+        "3. Create a new database in Notion with the properties specified",
+        "4. Share the database with your integration",
+        "5. Get the database ID from the database URL"
+      ]
+    },
+    "step_4_n8n": {
+      "title": "Import n8n Workflow",
+      "steps": [
+        "1. Copy the entire n8n_workflow JSON above",
+        "2. In n8n, go to Workflows > Import from JSON",
+        "3. Paste the workflow and import",
+        "4. Update the Apify actor ID in the 'Set Competitors' node",
+        "5. Configure all environment variables in n8n settings",
+        "6. Test the workflow with a manual trigger first"
+      ]
+    }
+  },
+  "competitor_specific_selectors": {
+    "taxplaniq": {
+      "headline": "h1, .hero-headline",
+      "pricing": ".pricing-section, [class*='price'], .cost",
+      "benefits": ".benefit, .feature, ul li",
+      "cta": ".btn-primary, .cta-button, button"
+    },
+    "fpalpha": {
+      "headline": "h1, .hero-title",
+      "pricing": ".pricing, [class*='price']",
+      "benefits": ".feature, .benefit, li",
+      "cta": "a[href*='demo'], .btn, button"
+    },
+    "rightcapital": {
+      "headline": "h1, .main-title",
+      "pricing": ".pricing, [class*='price']", 
+      "benefits": ".feature, ul li",
+      "cta": "a[href*='demo'], a[href*='trial'], button"
+    },
+    "taxstatus": {
+      "headline": "h1, .hero-headline",
+      "pricing": ".pricing, [class*='price']",
+      "benefits": ".feature, .benefit, li",
+      "cta": ".btn, button, a[class*='btn']"
+    }
+  },
+  "testing_checklist": {
+    "before_production": [
+      "✅ Test Apify actor with each competitor URL",
+      "✅ Verify data is being saved to Airtable correctly",
+      "✅ Test change detection logic with sample data",
+      "✅ Confirm Notion integration is working",
+      "✅ Test email notifications",
+      "✅ Run a full workflow test manually",
+      "✅ Check that all environment variables are set"
+    ]
+  },
+  "monitoring_and_maintenance": {
+    "monthly_tasks": [
+      "Review change detection accuracy",
+      "Check for any failed workflow runs", 
+      "Verify competitor websites haven't changed structure"
+    ],
+    "quarterly_tasks": [
+      "Update CSS selectors if websites changed",
+      "Review and adjust significance scoring",
+      "Add/remove competitors as needed"
+    ],
+    "troubleshooting": {
+      "no_data_scraped": [
+        "Check if website structure changed",
+        "Update CSS selectors in the pageFunction",
+        "Verify Apify actor is running successfully"
+      ],
+      "no_changes_detected": [
+        "Lower the similarity threshold in compare logic",
+        "Check if data is being saved to Airtable",
+        "Manually compare current vs previous snapshots"
+      ],
+      "notion_not_updating": [
+        "Verify Notion integration token is valid",
+        "Check database permissions",
+        "Confirm database ID is correct"
+      ]
+    }
+  },
+  "cost_estimate": {
+    "monthly_costs": {
+      "apify": "$49 (Pro plan for reliable scraping)",
+      "n8n_cloud": "$20 (or free if self-hosted)",
+      "airtable": "$20 (Pro plan for API access)",
+      "notion": "$0 (free for personal use)",
+      "total": "$89/month (or $69 if self-hosting n8n)"
+    },
+    "time_investment": {
+      "initial_setup": "4-6 hours",
+      "monthly_maintenance": "15-30 minutes",
+      "quarterly_updates": "1-2 hours"
+    }
+  }
